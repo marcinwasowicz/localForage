@@ -862,7 +862,7 @@ function setMultipleItems(
                         });
                     })
                 );
-                return promise;
+                return inputNormalizationPromise;
             })
             .then(function(inputArray) {
                 createTransaction(self._dbInfo, READ_WRITE, function(

@@ -1224,7 +1224,7 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                     return [normalizedKey, _encodeBlob(value)];
                 });
             }));
-            return promise;
+            return inputNormalizationPromise;
         }).then(function (inputArray) {
             createTransaction(self._dbInfo, READ_WRITE, function (err, transaction) {
                 if (err) {
