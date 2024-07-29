@@ -1144,6 +1144,7 @@ function getMultipleItems(keys, synchronizationKey) {
                     var allKeys = [].concat(normalizedKeys, [synchronizationKey]);
                     var requests = [];
                     var result = {};
+                    var values = {};
 
                     var placeRequest = function placeRequest(keysArray, index) {
                         var key = keysArray[index];
@@ -1162,7 +1163,7 @@ function getMultipleItems(keys, synchronizationKey) {
                             if (key === synchronizationKey) {
                                 result['synchronizationValue'] = value;
                             } else {
-                                result[key] = value;
+                                values[key] = value;
                             }
 
                             if (index < keysArray.length() - 1) {
@@ -1170,6 +1171,7 @@ function getMultipleItems(keys, synchronizationKey) {
                                 return;
                             }
 
+                            result['values'] = values;
                             resolve(result);
                         };
 

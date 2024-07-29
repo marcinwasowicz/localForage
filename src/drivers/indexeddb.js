@@ -764,7 +764,7 @@ function getMultipleItems(keys, synchronizationKey) {
                         return reject(err);
                     }
 
-                    try{
+                    try {
                         var store = transaction.objectStore(
                             self._dbInfo.storeName
                         );
@@ -772,8 +772,9 @@ function getMultipleItems(keys, synchronizationKey) {
                         var allKeys = [...normalizedKeys, synchronizationKey];
                         var requests = [];
                         var result = {};
+                        var values = {};
 
-                        var placeRequest = function (keysArray, index) {
+                        var placeRequest = function(keysArray, index) {
                             var key = keysArray[index];
                             var req = store.get(key);
 
@@ -782,15 +783,15 @@ function getMultipleItems(keys, synchronizationKey) {
                                 if (value === undefined) {
                                     value = null;
                                 }
-                                
+
                                 if (_isEncodedBlob(value)) {
                                     value = _decodeBlob(value);
                                 }
 
                                 if (key === synchronizationKey) {
                                     result['synchronizationValue'] = value;
-                                } else { 
-                                    result[key] = value;
+                                } else {
+                                    values[key] = value;
                                 }
 
                                 if (index < keysArray.length() - 1) {
@@ -798,6 +799,7 @@ function getMultipleItems(keys, synchronizationKey) {
                                     return;
                                 }
 
+                                result['values'] = values;
                                 resolve(result);
                             };
 
@@ -806,10 +808,9 @@ function getMultipleItems(keys, synchronizationKey) {
                             };
 
                             requests.push(req);
-                        }
+                        };
 
                         placeRequest(allKeys, 0);
-
                     } catch (e) {
                         reject(e);
                     }
@@ -821,7 +822,13 @@ function getMultipleItems(keys, synchronizationKey) {
     return promise;
 }
 
-function setMultipleItems(input, synchronizationKey, expectedSynchronizationValue, newSynchronizationValue, forceWrite) {
+function setMultipleItems(
+    input,
+    synchronizationKey,
+    expectedSynchronizationValue,
+    newSynchronizationValue,
+    forceWrite
+) {
     var self = this;
     var normalizedSynchronizationKey = normalizeKey(synchronizationKey);
 
@@ -830,27 +837,29 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
             .ready()
             .then(function() {
                 var inputArray = Object.entries(input);
-                var inputNormalizationPromise = Promise.all(inputArray.map(function([key, value]) {
-                    var normalizedKey = normalizeKey(key);
-                    if (value === null) {
-                        value = undefined;
-                    }
-
-                    if (!toString.call(value) === '[object Blob]') {
-                        return new Promise(function(resolve, reject) {
-                            resolve([normalizedKey, value]);
-                        });
-                    }
-
-                    return _checkBlobSupport(dbInfo.db).then(function(
-                        blobSupport
-                    ) {
-                        if (blobSupport) {
-                            return [normalizedKey, value];
+                var inputNormalizationPromise = Promise.all(
+                    inputArray.map(function([key, value]) {
+                        var normalizedKey = normalizeKey(key);
+                        if (value === null) {
+                            value = undefined;
                         }
-                        return [normalizedKey, _encodeBlob(value)];
-                    });
-                }));
+
+                        if (!toString.call(value) === '[object Blob]') {
+                            return new Promise(function(resolve, reject) {
+                                resolve([normalizedKey, value]);
+                            });
+                        }
+
+                        return _checkBlobSupport(dbInfo.db).then(function(
+                            blobSupport
+                        ) {
+                            if (blobSupport) {
+                                return [normalizedKey, value];
+                            }
+                            return [normalizedKey, _encodeBlob(value)];
+                        });
+                    })
+                );
                 return promise;
             })
             .then(function(inputArray) {
@@ -875,8 +884,11 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                             if (value === undefined) {
                                 value = null;
                             }
-                            if (value !== expectedSynchronizationValue && !forceWrite) {
-                                reject("Another thread completed transaction");
+                            if (
+                                value !== expectedSynchronizationValue &&
+                                !forceWrite
+                            ) {
+                                reject('Another thread completed transaction');
                             }
 
                             for (var [key, value] of inputArray) {
@@ -889,13 +901,18 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                                 writeRequests.push(writeRequest);
                             }
 
-                            var synchronizationValueWriteRequest = store.put(newSynchronizationValue, normalizedSynchronizationKey);
+                            var synchronizationValueWriteRequest = store.put(
+                                newSynchronizationValue,
+                                normalizedSynchronizationKey
+                            );
 
                             synchronizationValueWriteRequest.onerror = function() {
                                 reject(synchronizationValueWriteRequest.err);
                             };
 
-                            writeRequests.push(synchronizationValueWriteRequest);
+                            writeRequests.push(
+                                synchronizationValueWriteRequest
+                            );
                         };
 
                         req.onerror = function() {
@@ -908,7 +925,7 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
 
                         transaction.onabort = transaction.onerror = function() {
                             reject(transaction.error);
-                        }
+                        };
                     } catch (e) {
                         reject(e);
                     }
