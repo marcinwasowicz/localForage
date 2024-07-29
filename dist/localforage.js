@@ -1166,7 +1166,7 @@ function getMultipleItems(keys, synchronizationKey) {
                                 values[key] = value;
                             }
 
-                            if (index < keysArray.length() - 1) {
+                            if (index < keysArray.length - 1) {
                                 placeRequest(keysArray, index + 1);
                                 return;
                             }
@@ -1241,7 +1241,7 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                             value = null;
                         }
                         if (value !== expectedSynchronizationValue && !forceWrite) {
-                            reject("Another thread completed transaction");
+                            reject('Another thread completed transaction');
                         }
 
                         for (var _iterator = inputArray, _isArray = Array.isArray(_iterator), _i = 0, _iterator = _isArray ? _iterator : _iterator[Symbol.iterator]();;) {

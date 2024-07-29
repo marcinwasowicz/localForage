@@ -794,7 +794,7 @@ function getMultipleItems(keys, synchronizationKey) {
                                     values[key] = value;
                                 }
 
-                                if (index < keysArray.length() - 1) {
+                                if (index < keysArray.length - 1) {
                                     placeRequest(keysArray, index + 1);
                                     return;
                                 }
