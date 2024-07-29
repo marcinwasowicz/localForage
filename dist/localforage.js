@@ -1198,7 +1198,9 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
     var normalizedSynchronizationKey = normalizeKey(synchronizationKey);
 
     var promise = new Promise$1(function (resolve, reject) {
+        var dbInfo;
         self.ready().then(function () {
+            dbInfo = self._dbInfo;
             var inputArray = Object.entries(input);
             var inputNormalizationPromise = Promise$1.all(inputArray.map(function (_ref) {
                 var key = _ref[0],

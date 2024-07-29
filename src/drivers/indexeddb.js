@@ -833,9 +833,11 @@ function setMultipleItems(
     var normalizedSynchronizationKey = normalizeKey(synchronizationKey);
 
     var promise = new Promise(function(resolve, reject) {
+        var dbInfo;
         self
             .ready()
             .then(function() {
+                dbInfo = self._dbInfo;
                 var inputArray = Object.entries(input);
                 var inputNormalizationPromise = Promise.all(
                     inputArray.map(function([key, value]) {
