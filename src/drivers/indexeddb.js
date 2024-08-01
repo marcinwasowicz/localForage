@@ -746,6 +746,190 @@ function removeItem(key, callback) {
     return promise;
 }
 
+function getMultipleItems(keys, synchronizationKey) {
+    var self = this;
+
+    var normalizedKeys = keys.map(normalizeKey);
+    var normalizedSynchronizationKey = normalizeKey(synchronizationKey);
+
+    var promise = new Promise(function(resolve, reject) {
+        self
+            .ready()
+            .then(function() {
+                createTransaction(self._dbInfo, READ_WRITE, function(
+                    err,
+                    transaction
+                ) {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    try {
+                        var store = transaction.objectStore(
+                            self._dbInfo.storeName
+                        );
+
+                        var allKeys = [
+                            ...normalizedKeys,
+                            normalizedSynchronizationKey
+                        ];
+                        var result = {};
+                        var values = {};
+
+                        var placeRequest = function(keysArray, index) {
+                            var key = keysArray[index];
+                            var req = store.get(key);
+
+                            req.onsuccess = function() {
+                                var value = req.result;
+                                if (value === undefined) {
+                                    value = null;
+                                }
+
+                                if (_isEncodedBlob(value)) {
+                                    value = _decodeBlob(value);
+                                }
+
+                                if (key === normalizedSynchronizationKey) {
+                                    result['synchronizationValue'] = value;
+                                } else {
+                                    values[key] = value;
+                                }
+
+                                if (index < keysArray.length - 1) {
+                                    placeRequest(keysArray, index + 1);
+                                    return;
+                                }
+
+                                result['values'] = values;
+                                resolve(result);
+                            };
+
+                            req.onerror = function() {
+                                reject(req.err);
+                            };
+                        };
+
+                        placeRequest(allKeys, 0);
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            })
+            .catch(reject);
+    });
+
+    return promise;
+}
+
+function setMultipleItems(
+    input,
+    synchronizationKey,
+    expectedSynchronizationValue,
+    newSynchronizationValue,
+    forceWrite
+) {
+    var self = this;
+    var normalizedSynchronizationKey = normalizeKey(synchronizationKey);
+
+    var promise = new Promise(function(resolve, reject) {
+        var dbInfo;
+        self
+            .ready()
+            .then(function() {
+                dbInfo = self._dbInfo;
+                var inputArray = Object.entries(input);
+                return Promise.all(
+                    inputArray.map(function([key, value]) {
+                        var normalizedKey = normalizeKey(key);
+                        if (value === null) {
+                            value = undefined;
+                        }
+
+                        if (!toString.call(value) === '[object Blob]') {
+                            return [normalizedKey, value];
+                        }
+
+                        return _checkBlobSupport(dbInfo.db).then(function(
+                            blobSupport
+                        ) {
+                            if (blobSupport) {
+                                return [normalizedKey, value];
+                            }
+                            return [normalizedKey, _encodeBlob(value)];
+                        });
+                    })
+                );
+            })
+            .then(function(inputArray) {
+                createTransaction(self._dbInfo, READ_WRITE, function(
+                    err,
+                    transaction
+                ) {
+                    if (err) {
+                        reject(err);
+                    }
+
+                    try {
+                        var store = transaction.objectStore(
+                            self._dbInfo.storeName
+                        );
+
+                        var req = store.get(normalizedSynchronizationKey);
+
+                        req.onsuccess = function() {
+                            var value = req.result;
+                            if (value === undefined) {
+                                value = null;
+                            }
+                            if (
+                                value !== expectedSynchronizationValue &&
+                                !forceWrite
+                            ) {
+                                reject('Another thread completed transaction');
+                                return;
+                            }
+
+                            for (var [key, value] of inputArray) {
+                                var writeRequest = store.put(value, key);
+
+                                writeRequest.onerror = function() {
+                                    reject(writeRequest.err);
+                                };
+                            }
+
+                            var synchronizationValueWriteRequest = store.put(
+                                newSynchronizationValue,
+                                normalizedSynchronizationKey
+                            );
+
+                            synchronizationValueWriteRequest.onerror = function() {
+                                reject(synchronizationValueWriteRequest.err);
+                            };
+                        };
+
+                        req.onerror = function() {
+                            reject(req.err);
+                        };
+
+                        transaction.oncomplete = function() {
+                            resolve();
+                        };
+
+                        transaction.onabort = transaction.onerror = function() {
+                            reject(transaction.error);
+                        };
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
+            })
+            .catch(reject);
+    });
+
+    return promise;
+}
+
 function clear(callback) {
     var self = this;
 
@@ -1107,6 +1291,8 @@ var asyncStorage = {
     getItem: getItem,
     setItem: setItem,
     removeItem: removeItem,
+    getMultipleItems: getMultipleItems,
+    setMultipleItems: setMultipleItems,
     clear: clear,
     length: length,
     key: key,
