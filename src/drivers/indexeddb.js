@@ -769,8 +769,10 @@ function getMultipleItems(keys, synchronizationKey) {
                             self._dbInfo.storeName
                         );
 
-                        var allKeys = [...normalizedKeys, synchronizationKey];
-                        var requests = [];
+                        var allKeys = [
+                            ...normalizedKeys,
+                            normalizedSynchronizationKey
+                        ];
                         var result = {};
                         var values = {};
 
@@ -788,7 +790,7 @@ function getMultipleItems(keys, synchronizationKey) {
                                     value = _decodeBlob(value);
                                 }
 
-                                if (key === synchronizationKey) {
+                                if (key === normalizedSynchronizationKey) {
                                     result['synchronizationValue'] = value;
                                 } else {
                                     values[key] = value;
@@ -806,8 +808,6 @@ function getMultipleItems(keys, synchronizationKey) {
                             req.onerror = function() {
                                 reject(req.err);
                             };
-
-                            requests.push(req);
                         };
 
                         placeRequest(allKeys, 0);
@@ -839,7 +839,7 @@ function setMultipleItems(
             .then(function() {
                 dbInfo = self._dbInfo;
                 var inputArray = Object.entries(input);
-                var inputNormalizationPromise = Promise.all(
+                return Promise.all(
                     inputArray.map(function([key, value]) {
                         var normalizedKey = normalizeKey(key);
                         if (value === null) {
@@ -847,9 +847,7 @@ function setMultipleItems(
                         }
 
                         if (!toString.call(value) === '[object Blob]') {
-                            return new Promise(function(resolve, reject) {
-                                resolve([normalizedKey, value]);
-                            });
+                            return [normalizedKey, value];
                         }
 
                         return _checkBlobSupport(dbInfo.db).then(function(
@@ -862,7 +860,6 @@ function setMultipleItems(
                         });
                     })
                 );
-                return inputNormalizationPromise;
             })
             .then(function(inputArray) {
                 createTransaction(self._dbInfo, READ_WRITE, function(
@@ -878,7 +875,6 @@ function setMultipleItems(
                             self._dbInfo.storeName
                         );
 
-                        var writeRequests = [];
                         var req = store.get(normalizedSynchronizationKey);
 
                         req.onsuccess = function() {
@@ -891,6 +887,7 @@ function setMultipleItems(
                                 !forceWrite
                             ) {
                                 reject('Another thread completed transaction');
+                                return;
                             }
 
                             for (var [key, value] of inputArray) {
@@ -899,8 +896,6 @@ function setMultipleItems(
                                 writeRequest.onerror = function() {
                                     reject(writeRequest.err);
                                 };
-
-                                writeRequests.push(writeRequest);
                             }
 
                             var synchronizationValueWriteRequest = store.put(
@@ -911,10 +906,6 @@ function setMultipleItems(
                             synchronizationValueWriteRequest.onerror = function() {
                                 reject(synchronizationValueWriteRequest.err);
                             };
-
-                            writeRequests.push(
-                                synchronizationValueWriteRequest
-                            );
                         };
 
                         req.onerror = function() {

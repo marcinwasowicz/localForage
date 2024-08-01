@@ -1141,8 +1141,7 @@ function getMultipleItems(keys, synchronizationKey) {
                 try {
                     var store = transaction.objectStore(self._dbInfo.storeName);
 
-                    var allKeys = [].concat(normalizedKeys, [synchronizationKey]);
-                    var requests = [];
+                    var allKeys = [].concat(normalizedKeys, [normalizedSynchronizationKey]);
                     var result = {};
                     var values = {};
 
@@ -1160,7 +1159,7 @@ function getMultipleItems(keys, synchronizationKey) {
                                 value = _decodeBlob(value);
                             }
 
-                            if (key === synchronizationKey) {
+                            if (key === normalizedSynchronizationKey) {
                                 result['synchronizationValue'] = value;
                             } else {
                                 values[key] = value;
@@ -1178,8 +1177,6 @@ function getMultipleItems(keys, synchronizationKey) {
                         req.onerror = function () {
                             reject(req.err);
                         };
-
-                        requests.push(req);
                     };
 
                     placeRequest(allKeys, 0);
@@ -1202,7 +1199,7 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
         self.ready().then(function () {
             dbInfo = self._dbInfo;
             var inputArray = Object.entries(input);
-            var inputNormalizationPromise = Promise$1.all(inputArray.map(function (_ref) {
+            return Promise$1.all(inputArray.map(function (_ref) {
                 var key = _ref[0],
                     value = _ref[1];
 
@@ -1212,9 +1209,7 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                 }
 
                 if (!toString.call(value) === '[object Blob]') {
-                    return new Promise$1(function (resolve, reject) {
-                        resolve([normalizedKey, value]);
-                    });
+                    return [normalizedKey, value];
                 }
 
                 return _checkBlobSupport(dbInfo.db).then(function (blobSupport) {
@@ -1224,7 +1219,6 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                     return [normalizedKey, _encodeBlob(value)];
                 });
             }));
-            return inputNormalizationPromise;
         }).then(function (inputArray) {
             createTransaction(self._dbInfo, READ_WRITE, function (err, transaction) {
                 if (err) {
@@ -1234,7 +1228,6 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                 try {
                     var store = transaction.objectStore(self._dbInfo.storeName);
 
-                    var writeRequests = [];
                     var req = store.get(normalizedSynchronizationKey);
 
                     req.onsuccess = function () {
@@ -1244,6 +1237,7 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                         }
                         if (value !== expectedSynchronizationValue && !forceWrite) {
                             reject('Another thread completed transaction');
+                            return;
                         }
 
                         for (var _iterator = inputArray, _isArray = Array.isArray(_iterator), _i = 0, _iterator = _isArray ? _iterator : _iterator[Symbol.iterator]();;) {
@@ -1267,8 +1261,6 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                             writeRequest.onerror = function () {
                                 reject(writeRequest.err);
                             };
-
-                            writeRequests.push(writeRequest);
                         }
 
                         var synchronizationValueWriteRequest = store.put(newSynchronizationValue, normalizedSynchronizationKey);
@@ -1276,8 +1268,6 @@ function setMultipleItems(input, synchronizationKey, expectedSynchronizationValu
                         synchronizationValueWriteRequest.onerror = function () {
                             reject(synchronizationValueWriteRequest.err);
                         };
-
-                        writeRequests.push(synchronizationValueWriteRequest);
                     };
 
                     req.onerror = function () {
